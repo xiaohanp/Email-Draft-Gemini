@@ -1,8 +1,8 @@
-# IMAP Email Drafting AI Assistant
+# Email Draft Gemini AI Assistant
 
 ![Email Agent Teaser](teaser.png)
 
-A lightweight Streamlit app that connects to your email via IMAP and uses Google Gemini to organize threads and draft replies. Built with Zimbra in mind, but works with any IMAP server.
+A lightweight app that connects to your email via IMAP and uses Google Gemini to organize threads and draft replies. Built with Zimbra in mind, but works with any IMAP server.
 
 ## Features
 
