@@ -54,10 +54,13 @@ if 'selected_thread' not in st.session_state:
     st.session_state.selected_thread = None
 if 'current_draft' not in st.session_state:
     st.session_state.current_draft = ""
+    st.session_state.chat_messages = []
 if 'active_source' not in st.session_state:
     st.session_state.active_source = None
 if 'page' not in st.session_state:
     st.session_state.page = 0
+if 'chat_messages' not in st.session_state:
+    st.session_state.chat_messages = []
 if 'threads' not in st.session_state:
     with st.spinner("Auto-fetching from Inria Zimbra..."):
         try:
@@ -117,6 +120,7 @@ with st.sidebar:
                 st.session_state.threads = threads
                 st.session_state.selected_thread = None
                 st.session_state.current_draft = ""
+                st.session_state.chat_messages = []
                 st.success(f"Fetched {len(threads)} recent threads.")
             except Exception as e:
                 st.error(f"Error fetching emails: {e}")
@@ -144,6 +148,7 @@ with col1:
             if st.button(button_label, key=f"thread_{actual_idx}", use_container_width=True):
                 st.session_state.selected_thread = thread
                 st.session_state.current_draft = ""
+                st.session_state.chat_messages = []
                 st.rerun()
                 
         st.divider()
@@ -184,155 +189,180 @@ with col3:
             
         st.divider()
         
-        # Header and Language Switcher
-        h_col1, h_col2 = st.columns([0.5, 0.5])
-        with h_col1:
-            st.subheader("AI Draft")
-        with h_col2:
-            target_language = st.radio("Language", ["English", "French"], horizontal=True, label_visibility="collapsed", key="draft_lang")
-            
-        if 'last_draft_lang' not in st.session_state:
-            st.session_state.last_draft_lang = "English"
-
-        # If language was changed while a draft exists, translate it
-        if st.session_state.current_draft and st.session_state.last_draft_lang != st.session_state.draft_lang:
-            with st.spinner(f"Translating draft to {st.session_state.draft_lang}..."):
-                st.session_state.current_draft = drafter.refine_draft(
-                    thread_context=thread.get_context(),
-                    my_persona=my_persona,
-                    current_draft=st.session_state.current_draft,
-                    adjustment=f"Please translate this exact draft into {st.session_state.draft_lang}."
-                )
-                st.session_state.last_draft_lang = st.session_state.draft_lang
-                st.rerun()
+        tab_draft, tab_chat = st.tabs(["Draft Reply", "Chat about Email"])
         
-        if not st.session_state.current_draft and drafter:
-            if st.button("Generate AI Draft"):
-                with st.spinner("Generating draft with Gemini..."):
-                    st.session_state.current_draft = drafter.draft_reply(thread.get_context(), my_persona, language=st.session_state.draft_lang)
-                    st.session_state.last_draft_lang = st.session_state.draft_lang
-                    st.rerun()
+        with tab_draft:
         
-        if st.session_state.current_draft:
-            if "[NEEDS_CONTEXT]" in st.session_state.current_draft:
-                st.warning("Gemini indicated it doesn't have enough context to write a confident reply.")
-                
-            st.markdown("<br/>", unsafe_allow_html=True)
+            # Header and Language Switcher
+            h_col1, h_col2 = st.columns([0.5, 0.5])
+            with h_col1:
+                st.subheader("AI Draft")
+            with h_col2:
+                target_language = st.radio("Language", ["English", "French"], horizontal=True, label_visibility="collapsed", key="draft_lang")
             
-            # --- 1. Conversational Refinement Above the Editor ---
-            if "refine_prompt_key" not in st.session_state:
-                st.session_state.refine_prompt_key = 0
+            if 'last_draft_lang' not in st.session_state:
+                st.session_state.last_draft_lang = "English"
 
-            refine_col1, refine_col2 = st.columns([0.8, 0.2])
-            with refine_col1:
-                prompt_input = st.text_input("Ask AI to adjust the draft (e.g. 'Make it more formal'):", 
-                                             key=f"refine_input_{st.session_state.refine_prompt_key}")
-            with refine_col2:
-                # Add vertical margin so the button aligns nicely with the text input field
-                st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
-                refine_btn = st.button("Adjust", use_container_width=True)
-
-            if refine_btn and prompt_input:
-                with st.spinner("Refining draft..."):
-                    new_draft = drafter.refine_draft(
+            # If language was changed while a draft exists, translate it
+            if st.session_state.current_draft and st.session_state.last_draft_lang != st.session_state.draft_lang:
+                with st.spinner(f"Translating draft to {st.session_state.draft_lang}..."):
+                    st.session_state.current_draft = drafter.refine_draft(
                         thread_context=thread.get_context(),
                         my_persona=my_persona,
                         current_draft=st.session_state.current_draft,
-                        adjustment=prompt_input
+                        adjustment=f"Please translate this exact draft into {st.session_state.draft_lang}."
                     )
-                    st.session_state.current_draft = new_draft
+                    st.session_state.last_draft_lang = st.session_state.draft_lang
+                    st.rerun()
+        
+            if not st.session_state.current_draft and drafter:
+                if st.button("Generate AI Draft"):
+                    with st.spinner("Generating draft with Gemini..."):
+                        st.session_state.current_draft = drafter.draft_reply(thread.get_context(), my_persona, language=st.session_state.draft_lang)
+                        st.session_state.last_draft_lang = st.session_state.draft_lang
+                        st.rerun()
+        
+            if st.session_state.current_draft:
+                if "[NEEDS_CONTEXT]" in st.session_state.current_draft:
+                    st.warning("Gemini indicated it doesn't have enough context to write a confident reply.")
                 
-                # Increment the key to force the text input to completely clear on reload
-                st.session_state.refine_prompt_key += 1
-                st.rerun()
+                st.markdown("<br/>", unsafe_allow_html=True)
+            
+                # --- 1. Conversational Refinement Above the Editor ---
+                if "refine_prompt_key" not in st.session_state:
+                    st.session_state.refine_prompt_key = 0
 
-            # --- 2. Copy Button Snug with the Editor Label ---
-            draft_json = json.dumps(st.session_state.current_draft)
-            copy_html = f"""
-            <style>
-                @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600&display=swap');
-                body {{ margin: 0; padding: 0; }}
-                #copy-btn {{
-                    display: inline-flex;
-                    align-items: center;
-                    justify-content: center;
-                    font-weight: 400;
-                    padding: 0.25rem 0.75rem;
-                    border-radius: 0.5rem;
-                    min-height: 38px;
-                    margin: 0px;
-                    line-height: 1.6;
-                    color: rgb(49, 51, 63);
-                    width: 100%;
-                    user-select: none;
-                    background-color: #FFFFFF;
-                    border: 1px solid rgba(49, 51, 63, 0.2);
-                    cursor: pointer;
-                    font-family: "Source Sans Pro", sans-serif;
-                    font-size: 1rem;
-                    transition: border-color 0.15s, color 0.15s;
-                }}
-                #copy-btn:hover {{
-                    border-color: #1C83E1;
-                    color: #1C83E1;
-                }}
-                #copy-btn:focus {{
-                    outline: none;
-                    border-color: #1C83E1;
-                    color: #1C83E1;
-                    box-shadow: rgba(28, 131, 225, 0.5) 0px 0px 0px 0.2rem;
-                }}
-            </style>
-            <div>
-                <button id="copy-btn">Copy</button>
-            </div>
-            <script>
-                const btn = document.getElementById('copy-btn');
-                btn.addEventListener('click', () => {{
-                    const text = {draft_json};
-                    if (navigator.clipboard && window.isSecureContext) {{
-                        navigator.clipboard.writeText(text).then(() => {{
-                            btn.innerText = 'Copied!'; setTimeout(() => btn.innerText = 'Copy', 2000);
-                        }});
-                    }} else {{
-                        const ta = document.createElement('textarea');
-                        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-                        document.body.appendChild(ta); ta.select();
-                        try {{ document.execCommand('copy'); btn.innerText = 'Copied!'; setTimeout(() => btn.innerText = 'Copy', 2000); }} 
-                        catch (err) {{ btn.innerText = 'Failed'; }}
-                        document.body.removeChild(ta);
+                refine_col1, refine_col2 = st.columns([0.8, 0.2])
+                with refine_col1:
+                    prompt_input = st.text_input("Ask AI to adjust the draft (e.g. 'Make it more formal'):", 
+                                                 key=f"refine_input_{st.session_state.refine_prompt_key}")
+                with refine_col2:
+                    # Add vertical margin so the button aligns nicely with the text input field
+                    st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+                    refine_btn = st.button("Adjust", use_container_width=True)
+
+                if refine_btn and prompt_input:
+                    with st.spinner("Refining draft..."):
+                        new_draft = drafter.refine_draft(
+                            thread_context=thread.get_context(),
+                            my_persona=my_persona,
+                            current_draft=st.session_state.current_draft,
+                            adjustment=prompt_input
+                        )
+                        st.session_state.current_draft = new_draft
+                
+                    # Increment the key to force the text input to completely clear on reload
+                    st.session_state.refine_prompt_key += 1
+                    st.rerun()
+
+                # --- 2. Copy Button Snug with the Editor Label ---
+                draft_json = json.dumps(st.session_state.current_draft)
+                copy_html = f"""
+                <style>
+                    @import url('https://fonts.googleapis.com/css2?family=Source+Sans+Pro:wght@400;600&display=swap');
+                    body {{ margin: 0; padding: 0; }}
+                    #copy-btn {{
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-weight: 400;
+                        padding: 0.25rem 0.75rem;
+                        border-radius: 0.5rem;
+                        min-height: 38px;
+                        margin: 0px;
+                        line-height: 1.6;
+                        color: rgb(49, 51, 63);
+                        width: 100%;
+                        user-select: none;
+                        background-color: #FFFFFF;
+                        border: 1px solid rgba(49, 51, 63, 0.2);
+                        cursor: pointer;
+                        font-family: "Source Sans Pro", sans-serif;
+                        font-size: 1rem;
+                        transition: border-color 0.15s, color 0.15s;
                     }}
-                }});
-            </script>
-            """
+                    #copy-btn:hover {{
+                        border-color: #1C83E1;
+                        color: #1C83E1;
+                    }}
+                    #copy-btn:focus {{
+                        outline: none;
+                        border-color: #1C83E1;
+                        color: #1C83E1;
+                        box-shadow: rgba(28, 131, 225, 0.5) 0px 0px 0px 0.2rem;
+                    }}
+                </style>
+                <div>
+                    <button id="copy-btn">Copy</button>
+                </div>
+                <script>
+                    const btn = document.getElementById('copy-btn');
+                    btn.addEventListener('click', () => {{
+                        const text = {draft_json};
+                        if (navigator.clipboard && window.isSecureContext) {{
+                            navigator.clipboard.writeText(text).then(() => {{
+                                btn.innerText = 'Copied!'; setTimeout(() => btn.innerText = 'Copy', 2000);
+                            }});
+                        }} else {{
+                            const ta = document.createElement('textarea');
+                            ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+                            document.body.appendChild(ta); ta.select();
+                            try {{ document.execCommand('copy'); btn.innerText = 'Copied!'; setTimeout(() => btn.innerText = 'Copy', 2000); }} 
+                            catch (err) {{ btn.innerText = 'Failed'; }}
+                            document.body.removeChild(ta);
+                        }}
+                    }});
+                </script>
+                """
             
-            # Place the label and the copy button on the same line to make it look like one box header
-            col_label, col_btn = st.columns([0.8, 0.2])
-            with col_label:
-                st.markdown("**Review and Edit Draft:**")
-            with col_btn:
-                copy_btn_placeholder = st.empty()
+                # Place the label and the copy button on the same line to make it look like one box header
+                col_label, col_btn = st.columns([0.8, 0.2])
+                with col_label:
+                    st.markdown("**Review and Edit Draft:**")
+                with col_btn:
+                    copy_btn_placeholder = st.empty()
             
-            # The text area
-            edited_draft = st.text_area("Review and Edit Draft:", value=st.session_state.current_draft, height=300, label_visibility="collapsed")
-            st.session_state.current_draft = edited_draft
+                # The text area
+                edited_draft = st.text_area("Review and Edit Draft:", value=st.session_state.current_draft, height=300, label_visibility="collapsed")
+                st.session_state.current_draft = edited_draft
             
-            # Inject updated text into copy button
-            with copy_btn_placeholder:
-                components.html(copy_html, height=42)
+                # Inject updated text into copy button
+                with copy_btn_placeholder:
+                    components.html(copy_html, height=42)
             
-            if st.button("Save Draft to Inbox", use_container_width=True, type="primary"):
-                if st.session_state.active_source:
-                    draft = Draft(
-                        thread_id=thread.id,
-                        subject=f"Re: {latest.subject}",
-                        body=st.session_state.current_draft,
-                        to_address=latest.sender
-                    )
-                    success = st.session_state.active_source.save_draft(draft)
-                    if success:
-                        st.success("Draft saved successfully!")
+                if st.button("Save Draft to Inbox", use_container_width=True, type="primary"):
+                    if st.session_state.active_source:
+                        draft = Draft(
+                            thread_id=thread.id,
+                            subject=f"Re: {latest.subject}",
+                            body=st.session_state.current_draft,
+                            to_address=latest.sender
+                        )
+                        success = st.session_state.active_source.save_draft(draft)
+                        if success:
+                            st.success("Draft saved successfully!")
+                        else:
+                            st.error("Failed to save draft.")
                     else:
-                        st.error("Failed to save draft.")
-                else:
-                    st.error("No active source selected.")
+                        st.error("No active source selected.")
+
+        with tab_chat:
+            st.subheader("Chat about this Email")
+            for msg in st.session_state.chat_messages:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
+                    
+            if prompt := st.chat_input("Ask a question about this thread..."):
+                st.session_state.chat_messages.append({"role": "user", "content": prompt})
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+                    
+                with st.chat_message("assistant"):
+                    with st.spinner("Thinking..."):
+                        response = drafter.chat_about_email(
+                            thread.get_context(),
+                            st.session_state.chat_messages[:-1],
+                            prompt
+                        )
+                        st.markdown(response)
+                st.session_state.chat_messages.append({"role": "assistant", "content": response})
