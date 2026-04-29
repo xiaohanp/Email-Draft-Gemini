@@ -2,14 +2,21 @@
 
 ![Email Agent Teaser](teaser.png)
 
-A lightweight app that connects to your email via IMAP and uses Google Gemini to organize threads and draft replies. Built with Zimbra in mind, but works with any IMAP server.
+A lightweight app that connects to your whole email threads via IMAP and uses Google Gemini to organize threads and draft replies based on the whole context. Built with Zimbra in mind, but works with any IMAP server.
 
 ## Features
 
-- **IMAP support**: Reads emails from `INBOX` and `Sent` to reconstruct conversations  
-- **Threading**: Groups emails by subject, removing `Re:`, `Fwd:`, etc.  
-- **Editable AI drafts**: Generates replies using Gemini based on your writing style . Refine drafts with simple instructions (e.g. “make it shorter”, “more formal”)  
-- **Bilingual**: Supports English and French for drafting and translation  
+- **Full conversation context**  
+  Reconstructs entire email threads from `INBOX` and `Sent`, so replies are always grounded in the complete history  
+
+- **Smart threading**  
+  Groups messages by subject and cleans prefixes like `Re:` and `Fwd:` for coherent conversations  
+
+- **Editable AI drafts**  
+  Generates replies (via Gemini) in your writing style, with quick refinements 
+
+- **Bilingual support**  
+  Draft and translate seamlessly in English and French  
 
 ## Quick Start 
 
